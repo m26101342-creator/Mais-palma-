@@ -3,11 +3,22 @@
 <html lang="pt-AO" class="light">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    
+    <!-- PWA Settings for Native Feel -->
     <meta name="theme-color" content="#FFFFFF" />
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="application-name" content="Mais Palma">
+    <meta name="apple-mobile-web-app-title" content="Mais Palma">
+    <meta name="msapplication-starturl" content="/">
+    
     <title>Mais Palma Manager</title>
     <link rel="manifest" href="/manifest.json">
     <link rel="icon" href="https://i.postimg.cc/6q6K9xSV/Imagotipo_V_2.png" type="image/png">
+    <link rel="apple-touch-icon" href="https://i.postimg.cc/6q6K9xSV/Imagotipo_V_2.png">
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       // Service Worker Registration for Offline Capability
@@ -15,7 +26,11 @@
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js')
             .then(registration => {
-              console.log('SW registered:', registration);
+              console.log('SW registered with scope:', registration.scope);
+              // Force update if a new SW is found
+              if (registration.waiting) {
+                registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+              }
             })
             .catch(error => {
               console.log('SW registration failed:', error);
@@ -115,6 +130,8 @@
         transition: background-color 0.4s ease, color 0.4s ease;
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
+        /* Disable pull-to-refresh on mobile to feel native */
+        overscroll-behavior-y: none;
       }
       
       .dark body {

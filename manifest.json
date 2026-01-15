@@ -2,21 +2,25 @@
 {
   "name": "Mais Palma Manager",
   "short_name": "Mais Palma",
-  "start_url": ".",
+  "start_url": "/?source=pwa",
   "display": "standalone",
-  "background_color": "#FAFAFA",
-  "theme_color": "#121212",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "background_color": "#F3F4F6",
+  "theme_color": "#FFFFFF",
   "orientation": "portrait",
+  "scope": "/",
   "icons": [
     {
       "src": "https://i.postimg.cc/6q6K9xSV/Imagotipo_V_2.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
       "src": "https://i.postimg.cc/6q6K9xSV/Imagotipo_V_2.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }

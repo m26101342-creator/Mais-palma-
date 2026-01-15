@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'mais-palma-offline-v3';
+const CACHE_NAME = 'mais-palma-offline-v4'; // Updated to v4 to force refresh
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -8,25 +8,25 @@ const STATIC_ASSETS = [
   'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap'
 ];
 
-// 1. Instalação: Armazena o "App Shell" (estrutura básica) imediatamente
+// 1. Instalação: Cacheia arquivos críticos imediatamente
 self.addEventListener('install', (event) => {
-  self.skipWaiting();
+  self.skipWaiting(); // Força o SW a ativar imediatamente
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      console.log('[SW] Instalando e cacheando recursos estáticos');
+      console.log('[SW] Cacheando App Shell v4');
       return cache.addAll(STATIC_ASSETS);
     })
   );
 });
 
-// 2. Ativação: Limpa caches antigos para garantir atualização
+// 2. Ativação: Limpa caches antigos
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
           if (cacheName !== CACHE_NAME) {
-            console.log('[SW] Removendo cache antigo:', cacheName);
+            console.log('[SW] Apagando cache antigo:', cacheName);
             return caches.delete(cacheName);
           }
         })
@@ -35,18 +35,17 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// 3. Interceptação de Requisições (Fetch)
+// 3. Fetch: Estratégia Híbrida
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // Ignorar requisições que não sejam GET ou que sejam para APIs externas (ex: Gemini)
-  if (event.request.method !== 'GET' || url.hostname.includes('googleapis') || url.hostname.includes('generativelanguage')) {
+  // Ignorar APIs externas que precisam de internet real
+  if (url.hostname.includes('googleapis') || url.hostname.includes('generativelanguage')) {
     return;
   }
 
-  // ESTRATÉGIA 1: NAVEGAÇÃO (HTML) -> Network First, Fallback to Cache
-  // Tenta pegar a versão mais nova na rede. Se falhar (offline), entrega o index.html do cache.
-  // Isso garante que o app abra offline e carregue o React, que por sua vez lerá o LocalStorage.
+  // A. NAVEGAÇÃO (HTML)
+  // Estratégia: Network First -> Fallback Cache -> Fallback Offline Page
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request)
@@ -57,34 +56,40 @@ self.addEventListener('fetch', (event) => {
           });
         })
         .catch(() => {
-          console.log('[SW] Offline: Servindo App Shell');
-          return caches.match('/index.html');
+          // SE FALHAR A REDE (OFFLINE), RETORNA O INDEX.HTML DO CACHE
+          // Isso é o que faz o app "abrir" offline
+          return caches.match('/index.html') || caches.match('/');
         })
     );
     return;
   }
 
-  // ESTRATÉGIA 2: RECURSOS (JS, CSS, Imagens) -> Stale-While-Revalidate
-  // Entrega o cache imediatamente (rápido) e tenta atualizar em segundo plano.
-  // Se não tiver no cache, busca na rede e salva.
+  // B. ARQUIVOS ESTÁTICOS (JS, CSS, IMAGENS)
+  // Estratégia: Stale-While-Revalidate (Cache Rápido + Atualização em Background)
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
-      // Promessa de atualização em background
-      const fetchPromise = fetch(event.request).then((networkResponse) => {
-        // Verifica se a resposta é válida antes de cachear
-        if (networkResponse && networkResponse.status === 200 && (networkResponse.type === 'basic' || networkResponse.type === 'cors')) {
-          const responseToCache = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache);
-          });
-        }
-        return networkResponse;
-      }).catch(() => {
-         // Falha silenciosa na rede (usa o que tem no cache)
-      });
+      const fetchPromise = fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200 && (networkResponse.type === 'basic' || networkResponse.type === 'cors')) {
+            const responseToCache = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseToCache);
+            });
+          }
+          return networkResponse;
+        })
+        .catch(() => {
+           // Falha silenciosa se não tiver internet
+        });
 
-      // Retorna o item do cache se existir, senão espera o fetch
       return cachedResponse || fetchPromise;
     })
   );
+});
+
+// Listener para forçar atualização via mensagem (usado no index.html)
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
