@@ -6,10 +6,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     
     <!-- PWA Settings for Native Feel -->
-    <meta name="theme-color" content="#FFFFFF" />
+    <meta name="theme-color" content="#F3F4F6" />
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="application-name" content="Mais Palma">
     <meta name="apple-mobile-web-app-title" content="Mais Palma">
     <meta name="msapplication-starturl" content="/">
@@ -21,16 +21,26 @@
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-      // Service Worker Registration for Offline Capability
+      // Enhanced Service Worker Registration
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js')
             .then(registration => {
-              console.log('SW registered with scope:', registration.scope);
-              // Force update if a new SW is found
-              if (registration.waiting) {
-                registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-              }
+              console.log('SW registered successfully:', registration.scope);
+              
+              // Check for updates
+              registration.onupdatefound = () => {
+                const installingWorker = registration.installing;
+                if (installingWorker) {
+                  installingWorker.onstatechange = () => {
+                    if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                      // New content is available; please refresh.
+                      console.log('New content available, refreshing...');
+                      // Optional: Trigger a UI toast to ask user to reload
+                    }
+                  };
+                }
+              };
             })
             .catch(error => {
               console.log('SW registration failed:', error);
@@ -51,7 +61,7 @@
           extend: {
             colors: {
               gray: {
-                50: '#FAFAFA',   /* Mais Branco */
+                50: '#FAFAFA',
                 100: '#F5F5F5',
                 200: '#E5E5E5',
               },
@@ -62,7 +72,7 @@
                 gold: '#D98E15',    
                 gray: '#F9FAFB',   
                 text: '#211D49',    
-                muted: '#9CA3AF',   /* Cinza mais suave */
+                muted: '#9CA3AF',
                 border: '#F3F4F6',
                 light: '#FFFFFF'
               }
@@ -71,14 +81,14 @@
               sans: ['Inter', 'sans-serif'],
             },
             boxShadow: {
-              'soft': '0 8px 30px rgba(0, 0, 0, 0.04)', /* Sombra muito mais suave e difusa */
+              'soft': '0 8px 30px rgba(0, 0, 0, 0.04)',
               'glow': '0 0 20px rgba(243, 164, 33, 0.2)',
               'card': '0 4px 12px rgba(0, 0, 0, 0.03)'
             },
             backgroundImage: {
               'gradient-premium': 'linear-gradient(135deg, #F3A421 0%, #F5B045 100%)', 
               'gradient-dark': 'radial-gradient(circle at top right, #2F2A5F 0%, #211D49 60%)',
-              'gradient-light': 'linear-gradient(to bottom, #FFFFFF 0%, #FAFAFA 100%)', /* Quase imperceptível */
+              'gradient-light': 'linear-gradient(to bottom, #FFFFFF 0%, #FAFAFA 100%)',
             },
             animation: {
               'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
@@ -97,7 +107,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
       :root {
-        /* Premium White Mode */
         --bg-main: #FFFFFF;      
         --bg-card: #FFFFFF;      
         --bg-input: #FAFAFA;     
@@ -105,13 +114,11 @@
         --text-muted: #9CA3AF;
         --primary: #F3A421;      
         --border: #F3F4F6;
-        
         --shadow-soft: 0 10px 40px -10px rgba(0, 0, 0, 0.05);
         --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
       }
 
       .dark {
-        /* Premium Dark Mode - Retained for compatibility */
         --bg-main: #1A173B;      
         --bg-card: #211D49;      
         --bg-input: #2A2655;     
@@ -125,12 +132,11 @@
 
       body { 
         font-family: 'Inter', sans-serif; 
-        background-color: var(--bg-main); 
+        background-color: #F3F4F6; /* Matched to PWA background */
         color: var(--text-main); 
         transition: background-color 0.4s ease, color 0.4s ease;
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
-        /* Disable pull-to-refresh on mobile to feel native */
         overscroll-behavior-y: none;
       }
       
@@ -139,11 +145,6 @@
         background-attachment: fixed;
       }
 
-      .light body {
-        background-image: none; /* Removed gradient for cleaner white look */
-        background-color: #FFFFFF;
-      }
-      
       .scrollbar-hide::-webkit-scrollbar { display: none; }
       .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 

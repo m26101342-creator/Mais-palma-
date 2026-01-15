@@ -1,6 +1,9 @@
 
-const CACHE_NAME = 'mais-palma-offline-v4'; // Updated to v4 to force refresh
-const STATIC_ASSETS = [
+const CACHE_NAME = 'mais-palma-pro-v5'; // Versão incrementada
+const RUNTIME_CACHE = 'runtime-cache';
+
+// Arquivos que DEVEM estar no cache imediatamente
+const PRECACHE_URLS = [
   '/',
   '/index.html',
   '/manifest.json',
@@ -8,25 +11,27 @@ const STATIC_ASSETS = [
   'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap'
 ];
 
-// 1. Instalação: Cacheia arquivos críticos imediatamente
+// 1. Instalação: Prepara o terreno
 self.addEventListener('install', (event) => {
-  self.skipWaiting(); // Força o SW a ativar imediatamente
+  self.skipWaiting(); // Força ativação imediata
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      console.log('[SW] Cacheando App Shell v4');
-      return cache.addAll(STATIC_ASSETS);
-    })
+    caches.open(CACHE_NAME)
+      .then(cache => {
+        console.log('[SW] Instalando e cacheando núcleo');
+        return cache.addAll(PRECACHE_URLS);
+      })
   );
 });
 
-// 2. Ativação: Limpa caches antigos
+// 2. Ativação: Limpeza pesada de versões antigas
 self.addEventListener('activate', (event) => {
+  const currentCaches = [CACHE_NAME, RUNTIME_CACHE];
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
+    caches.keys().then(cacheNames => {
       return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            console.log('[SW] Apagando cache antigo:', cacheName);
+        cacheNames.map(cacheName => {
+          if (!currentCaches.includes(cacheName)) {
+            console.log('[SW] Removendo cache obsoleto:', cacheName);
             return caches.delete(cacheName);
           }
         })
@@ -35,61 +40,70 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// 3. Fetch: Estratégia Híbrida
+// 3. Estratégia de Interceptação (O Segredo do Offline)
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // Ignorar APIs externas que precisam de internet real
-  if (url.hostname.includes('googleapis') || url.hostname.includes('generativelanguage')) {
+  // A. Ignorar Google Analytics, Gemini AI e coisas que exigem internet pura
+  if (url.hostname.includes('google') || url.hostname.includes('generativelanguage')) {
     return;
   }
 
-  // A. NAVEGAÇÃO (HTML)
-  // Estratégia: Network First -> Fallback Cache -> Fallback Offline Page
+  // B. Navegação (Abrir o App) -> Network First, Fallback Cache
+  // Tenta abrir a página. Se falhar (offline), abre o index.html salvo.
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request)
-        .then((networkResponse) => {
-          return caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, networkResponse.clone());
-            return networkResponse;
-          });
+        .then(response => {
+           return caches.open(CACHE_NAME).then(cache => {
+             cache.put(event.request, response.clone());
+             return response;
+           });
         })
         .catch(() => {
-          // SE FALHAR A REDE (OFFLINE), RETORNA O INDEX.HTML DO CACHE
-          // Isso é o que faz o app "abrir" offline
-          return caches.match('/index.html') || caches.match('/');
+          // O GRANDE TRUQUE: Se estiver offline, retorna o index.html
+          // Isso permite que o React carregue e leia o LocalStorage
+          return caches.match('/index.html');
         })
     );
     return;
   }
 
-  // B. ARQUIVOS ESTÁTICOS (JS, CSS, IMAGENS)
-  // Estratégia: Stale-While-Revalidate (Cache Rápido + Atualização em Background)
+  // C. Arquivos JS, CSS, Imagens (Assets do Vite) -> Stale-While-Revalidate
+  // Tenta servir do cache (rápido). Em paralelo, busca na rede e atualiza o cache.
+  // Se não tiver no cache, busca na rede e salva para a próxima.
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      const fetchPromise = fetch(event.request)
-        .then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200 && (networkResponse.type === 'basic' || networkResponse.type === 'cors')) {
-            const responseToCache = networkResponse.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, responseToCache);
-            });
-          }
-          return networkResponse;
-        })
-        .catch(() => {
-           // Falha silenciosa se não tiver internet
+    caches.match(event.request).then(cachedResponse => {
+      // Se tem no cache, retorna imediatamente
+      if (cachedResponse) {
+        // Atualiza o cache em background se tiver internet
+        fetch(event.request).then(networkResponse => {
+             if(networkResponse && networkResponse.status === 200) {
+                 caches.open(RUNTIME_CACHE).then(cache => {
+                     cache.put(event.request, networkResponse.clone());
+                 });
+             }
+        }).catch(() => {}); // Ignora erros de rede em background
+        return cachedResponse;
+      }
+
+      // Se não tem no cache, busca na rede e salva
+      return fetch(event.request).then(response => {
+        // Verifica se a resposta é válida
+        if (!response || response.status !== 200 || response.type !== 'basic') {
+          return response;
+        }
+
+        const responseToCache = response.clone();
+        caches.open(RUNTIME_CACHE).then(cache => {
+          cache.put(event.request, responseToCache);
         });
 
-      return cachedResponse || fetchPromise;
+        return response;
+      }).catch(error => {
+         // Se falhar tudo (offline e sem cache), não há muito o que fazer para imagens novas
+         console.log('[SW] Falha ao buscar recurso:', event.request.url);
+      });
     })
   );
-});
-
-// Listener para forçar atualização via mensagem (usado no index.html)
-self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'SKIP_WAITING') {
-    self.skipWaiting();
-  }
 });
