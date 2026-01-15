@@ -117,12 +117,21 @@ const Financials: React.FC = () => {
     const monthName = reportDate.toLocaleString('pt-AO', { month: 'long', year: 'numeric' });
 
     try {
-        await generateMonthlyReportPDF(
+        const pdfFile = await generateMonthlyReportPDF(
             monthName, 
             { ...mStats, netProfit: mNetProfit, realProfit: mRealProfit }, 
             monthlyTransactions
         );
-        showNotification('Relatório Mensal baixado com sucesso!', 'success');
+        showNotification('PDF Pronto! Abrindo opções de partilha...', 'success');
+
+        // Trigger Native Sharing
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+            await navigator.share({
+                files: [pdfFile],
+                title: `Relatório ${monthName}`,
+                text: 'Segue o relatório financeiro mensal.'
+            });
+        }
     } catch (error) {
         console.error("Error generating report", error);
         showNotification("Erro ao gerar relatório", 'error');

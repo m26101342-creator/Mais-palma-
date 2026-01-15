@@ -127,8 +127,17 @@ const ServiceOrders: React.FC = () => {
           unitPrice: order.price,
           total: order.price
         }];
-        await generateInvoicePDF(order.clientName, order.phone, order.address, items, order.id, pdfSettings);
-        showNotification('Fatura PDF baixada com sucesso!', 'success');
+        const pdfFile = await generateInvoicePDF(order.clientName, order.phone, order.address, items, order.id, pdfSettings);
+        showNotification('PDF Pronto! Abrindo opções de partilha...', 'success');
+
+        // Trigger Native Sharing
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+            await navigator.share({
+                files: [pdfFile],
+                title: `Fatura #${order.id} - Mais Palma`,
+                text: `Olá ${order.clientName}, segue a fatura do serviço.`
+            });
+        }
     } catch (error) {
         console.error("Error generating Invoice", error);
         showNotification('Erro ao gerar fatura', 'error');

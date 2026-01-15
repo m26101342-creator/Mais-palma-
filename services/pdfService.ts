@@ -78,7 +78,7 @@ const generateCommercialDocument = async (
     items: PDFItem[],
     fileNamePrefix: string,
     settings?: PDFSettings
-) => {
+): Promise<File> => {
   const doc = new jsPDF({
       orientation: 'p',
       unit: 'mm',
@@ -376,27 +376,33 @@ const generateCommercialDocument = async (
   doc.setFontSize(6);
   doc.text("Documento processado por computador.", 105, footerY, { align: "center" });
 
-  // ADDED TIMESTAMP TO FILENAME TO PREVENT BROWSER "DOWNLOAD AGAIN" DIALOG
   const timestamp = Math.floor(Date.now() / 1000);
-  doc.save(`${fileNamePrefix}_${clientName.replace(/\s+/g, '_')}_${timestamp}.pdf`);
+  const finalFileName = `${fileNamePrefix}_${clientName.replace(/\s+/g, '_')}_${timestamp}.pdf`;
+  
+  // Download automatically as a fallback
+  doc.save(finalFileName);
+
+  // Return the File object for Web Share API
+  const blob = doc.output('blob');
+  return new File([blob], finalFileName, { type: 'application/pdf' });
 };
 
-export const generateQuotePDF = async (clientName: string, clientPhone: string | undefined, clientAddress: string | undefined, items: PDFItem[], settings?: PDFSettings) => {
+export const generateQuotePDF = async (clientName: string, clientPhone: string | undefined, clientAddress: string | undefined, items: PDFItem[], settings?: PDFSettings): Promise<File> => {
     const year = new Date().getFullYear();
     const id = Math.floor(Math.random() * 1000); 
-    await generateCommercialDocument("PRÓ-FORMA", `PP ${year}/${id}`, clientName, clientPhone, clientAddress, items, "Orcamento", settings);
+    return await generateCommercialDocument("PRÓ-FORMA", `PP ${year}/${id}`, clientName, clientPhone, clientAddress, items, "Orcamento", settings);
 };
 
-export const generateInvoicePDF = async (clientName: string, clientPhone: string | undefined, clientAddress: string | undefined, items: PDFItem[], orderId: string, settings?: PDFSettings) => {
+export const generateInvoicePDF = async (clientName: string, clientPhone: string | undefined, clientAddress: string | undefined, items: PDFItem[], orderId: string, settings?: PDFSettings): Promise<File> => {
     const year = new Date().getFullYear();
-    await generateCommercialDocument("FACTURA/RECIBO", `FR ${year}/${orderId}`, clientName, clientPhone, clientAddress, items, "Factura", settings);
+    return await generateCommercialDocument("FACTURA/RECIBO", `FR ${year}/${orderId}`, clientName, clientPhone, clientAddress, items, "Factura", settings);
 };
 
 export const generateMonthlyReportPDF = async (
     monthName: string,
     summary: { revenue: number, expenses: number, netProfit: number, realProfit: number },
     transactions: Transaction[]
-) => {
+): Promise<File> => {
     const doc = new jsPDF();
     doc.setFont("helvetica");
 
@@ -459,7 +465,13 @@ export const generateMonthlyReportPDF = async (
         y += 6;
     });
 
-    // Also add timestamp here
     const timestamp = Math.floor(Date.now() / 1000);
-    doc.save(`Relatorio_${monthName}_${timestamp}.pdf`);
+    const finalFileName = `Relatorio_${monthName}_${timestamp}.pdf`;
+    
+    // Download fallback
+    doc.save(finalFileName);
+
+    // Return File for Sharing
+    const blob = doc.output('blob');
+    return new File([blob], finalFileName, { type: 'application/pdf' });
 };

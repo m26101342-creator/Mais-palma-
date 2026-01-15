@@ -245,11 +245,21 @@ const Calculator: React.FC = () => {
             }
         ];
         
-        await generateQuotePDF(clientName, clientPhone, clientAddress, pdfItems, pdfSettings);
-        showNotification('Orçamento PDF baixado com sucesso!', 'success');
+        const pdfFile = await generateQuotePDF(clientName, clientPhone, clientAddress, pdfItems, pdfSettings);
+        showNotification('PDF Pronto! Abrindo opções de partilha...', 'success');
+
+        // Trigger Native Sharing
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+            await navigator.share({
+                files: [pdfFile],
+                title: 'Orçamento Mais Palma',
+                text: `Olá ${clientName}, segue o orçamento solicitado.`
+            });
+        }
+
     } catch (error) {
         console.error("Error generating PDF", error);
-        showNotification('Erro ao gerar PDF', 'error');
+        showNotification('PDF Salvo em Downloads', 'info');
     } finally {
         setTimeout(() => setIsDownloadingPdf(false), 2000);
     }
@@ -539,7 +549,7 @@ const Calculator: React.FC = () => {
                             className="col-span-1 py-4 bg-gray-50 border border-gray-100 text-brand-text rounded-2xl font-bold flex flex-col items-center justify-center gap-2 hover:bg-white transition group"
                         >
                             <Download size={24} strokeWidth={1.5} className="text-brand-muted group-hover:text-brand-text transition-colors" />
-                            <span className="text-[10px] uppercase tracking-wide font-black text-brand-muted group-hover:text-brand-text transition-colors">Baixar PDF</span>
+                            <span className="text-[10px] uppercase tracking-wide font-black text-brand-muted group-hover:text-brand-text transition-colors">Orçamento</span>
                         </button>
                         
                         <button 
