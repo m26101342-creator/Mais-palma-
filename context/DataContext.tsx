@@ -1,6 +1,6 @@
 
 import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
-import { PriceTableItem, Transaction, ServiceOrder, ItemCategory } from '../types';
+import { PriceTableItem, Transaction, ServiceOrder, ItemCategory, DocCounters } from '../types';
 
 // Initial Data
 const getInitialServices = (): PriceTableItem[] => [
@@ -45,6 +45,13 @@ const INITIAL_CATEGORIES = [
     'Salários'
 ];
 
+// Initial Counters
+const INITIAL_COUNTERS: DocCounters = {
+    quoteSequence: 0,
+    invoiceSequence: 0,
+    lastMonth: new Date().toISOString().slice(0, 7) // YYYY-MM
+};
+
 // Helper for LocalStorage
 const loadFromStorage = <T,>(key: string, fallback: T): T => {
   try {
@@ -82,6 +89,8 @@ interface DataContextType {
   updateOrderStatus: (id: string, status: ServiceOrder['status']) => void;
   
   pdfSettings: any;
+  
+  generateDocId: (type: 'QUOTE' | 'INVOICE') => string;
 
   // Notification System
   notification: NotificationState;
@@ -109,13 +118,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     loadFromStorage('mp_categories', Array.from(new Set(INITIAL_CATEGORIES)))
   );
 
+  const [counters, setCounters] = useState<DocCounters>(() => 
+    loadFromStorage('mp_doc_counters', INITIAL_COUNTERS)
+  );
+
   const [notification, setNotification] = useState<NotificationState>({
     message: '',
     type: 'info',
     visible: false
   });
 
-  // PDF Settings (can be expanded later, hardcoded defaults for now but prepared for storage)
+  // PDF Settings
   const pdfSettings = {
       logoX: 10,
       logoY: 10,
@@ -128,6 +141,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => { localStorage.setItem('mp_transactions', JSON.stringify(transactions)); }, [transactions]);
   useEffect(() => { localStorage.setItem('mp_orders', JSON.stringify(orders)); }, [orders]);
   useEffect(() => { localStorage.setItem('mp_categories', JSON.stringify(categories)); }, [categories]);
+  useEffect(() => { localStorage.setItem('mp_doc_counters', JSON.stringify(counters)); }, [counters]);
 
 
   const addCategory = (category: string) => {
@@ -178,31 +192,75 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const updateOrderStatus = (id: string, status: ServiceOrder['status']) => {
-    // Lógica automática: Se a ordem for marcada como COMPLETED, gera uma entrada no financeiro
     if (status === 'COMPLETED') {
         const order = orders.find(o => o.id === id);
-        // Verifica se a ordem existe e se JÁ não estava completada (para evitar duplicatas)
         if (order && order.status !== 'COMPLETED') {
             const autoTransaction: Transaction = {
                 id: `auto_${Date.now()}`,
-                // ALTERADO: Agora inclui o nome do cliente e os detalhes dos serviços
                 description: `${order.clientName} - ${order.serviceDetails}`,
                 amount: order.price,
                 type: 'ENTRY',
                 category: 'Serviços',
                 date: new Date().toISOString().split('T')[0]
             };
-            // Adiciona diretamente ao state de transações
             setTransactions(prev => [autoTransaction, ...prev]);
         }
     }
-
     setOrders(orders.map(o => o.id === id ? { ...o, status } : o));
+  };
+
+  // --- Document ID Logic ---
+  const generateDocId = (type: 'QUOTE' | 'INVOICE'): string => {
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
+      const currentMonthKey = now.toISOString().slice(0, 7); // YYYY-MM
+
+      let nextSeq = 1;
+      
+      setCounters(prev => {
+          // Reset logic if month changes? 
+          // User requested: "01 será ou fará referência ao número do mês... segundo 01 seja contagem".
+          // Assuming monthly reset for the sequence part to match MMNN format cleanly?
+          // Or strictly sequential regardless of month? 
+          // Usually "MP 2026/0101" implies Month 01, Sequence 01. 
+          // If we are in Feb: "MP 2026/0201". 
+          // Let's implement monthly reset for sequence to keep it '01' based on month.
+          
+          let newQuoteSeq = prev.quoteSequence;
+          let newInvoiceSeq = prev.invoiceSequence;
+
+          // Check if month changed, reset counters if desired. 
+          // For simplicity and standard compliance, let's keep sequence continuous per month.
+          if (prev.lastMonth !== currentMonthKey) {
+             newQuoteSeq = 0;
+             newInvoiceSeq = 0;
+          }
+
+          if (type === 'QUOTE') {
+              newQuoteSeq += 1;
+              nextSeq = newQuoteSeq;
+          } else {
+              newInvoiceSeq += 1;
+              nextSeq = newInvoiceSeq;
+          }
+
+          return {
+              quoteSequence: newQuoteSeq,
+              invoiceSequence: newInvoiceSeq,
+              lastMonth: currentMonthKey
+          };
+      });
+
+      // Format: MP YYYY/MMNN
+      const prefix = type === 'QUOTE' ? 'MP' : 'FR';
+      const sequenceStr = String(nextSeq).padStart(2, '0'); // Ensures '01'
+      
+      return `${prefix} ${currentYear}/${currentMonth}${sequenceStr}`;
   };
 
   const showNotification = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
       setNotification({ message, type, visible: true });
-      // Auto hide after 3 seconds
       setTimeout(() => {
           setNotification(prev => ({ ...prev, visible: false }));
       }, 3000);
@@ -217,7 +275,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       services, categories, addService, updateService, removeService, resetServices, addCategory,
       transactions, addTransaction, removeTransaction, 
       orders, addOrder, updateOrder, removeOrder, updateOrderStatus,
-      pdfSettings,
+      pdfSettings, generateDocId,
       notification, showNotification, hideNotification
     }}>
       {children}

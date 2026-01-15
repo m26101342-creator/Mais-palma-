@@ -46,7 +46,7 @@ const AnimatedItem: React.FC<AnimatedItemProps> = ({ children, index }) => {
 };
 
 const ServiceOrders: React.FC = () => {
-  const { orders, services, addOrder, updateOrder, removeOrder, updateOrderStatus, pdfSettings, showNotification } = useData();
+  const { orders, services, addOrder, updateOrder, removeOrder, updateOrderStatus, pdfSettings, showNotification, generateDocId } = useData();
   const [filter, setFilter] = useState<OrderStatus | 'ALL'>('ALL');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newOrder, setNewOrder] = useState<Partial<ServiceOrder>>({ status: 'PENDING' });
@@ -127,18 +127,26 @@ const ServiceOrders: React.FC = () => {
           unitPrice: order.price,
           total: order.price
         }];
-        const pdfFile = await generateInvoicePDF(order.clientName, order.phone, order.address, items, order.id, pdfSettings);
+        
+        // Generate new sequential Invoice ID
+        const docId = generateDocId('INVOICE');
+        
+        const pdfFile = await generateInvoicePDF(order.clientName, order.phone, order.address, items, docId, order.quoteRef, pdfSettings);
         showNotification('PDF Pronto! Abrindo opções de partilha...', 'success');
 
         // Trigger Native Sharing
         if (navigator.share && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
             await navigator.share({
                 files: [pdfFile],
-                title: `Fatura #${order.id} - Mais Palma`,
+                title: `Fatura ${docId}`,
                 text: `Olá ${order.clientName}, segue a fatura do serviço.`
             });
         }
-    } catch (error) {
+    } catch (error: any) {
+        if (error.name === 'AbortError') {
+             console.log('Compartilhamento cancelado pelo usuário');
+             return;
+        }
         console.error("Error generating Invoice", error);
         showNotification('Erro ao gerar fatura', 'error');
     } finally {
@@ -280,7 +288,10 @@ const ServiceOrders: React.FC = () => {
                         </div>
                         <div className="min-w-0 flex-1">
                             <h3 className="font-bold text-brand-text text-base leading-tight truncate">{order.clientName}</h3>
-                            <p className="text-[10px] text-brand-muted font-medium">ID #{order.id}</p>
+                            <div className="flex items-center gap-2">
+                                <p className="text-[10px] text-brand-muted font-medium">ID #{order.id}</p>
+                                {order.quoteRef && <span className="text-[8px] bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded font-bold">Ref: {order.quoteRef}</span>}
+                            </div>
                         </div>
                      </div>
                      

@@ -132,7 +132,11 @@ const Financials: React.FC = () => {
                 text: 'Segue o relatório financeiro mensal.'
             });
         }
-    } catch (error) {
+    } catch (error: any) {
+        if (error.name === 'AbortError') {
+             console.log('Compartilhamento cancelado pelo usuário');
+             return;
+        }
         console.error("Error generating report", error);
         showNotification("Erro ao gerar relatório", 'error');
     } finally {

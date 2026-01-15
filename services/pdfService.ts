@@ -77,7 +77,8 @@ const generateCommercialDocument = async (
     clientAddress: string | undefined,
     items: PDFItem[],
     fileNamePrefix: string,
-    settings?: PDFSettings
+    settings?: PDFSettings,
+    refQuote?: string // New optional parameter for invoices
 ): Promise<File> => {
   const doc = new jsPDF({
       orientation: 'p',
@@ -85,7 +86,6 @@ const generateCommercialDocument = async (
       format: 'a4'
   });
 
-  // Configurações padrão com LOGOTIPO AUMENTADO
   const config = settings || {
       logoX: 10,
       logoY: 6, 
@@ -97,14 +97,6 @@ const generateCommercialDocument = async (
   const today = new Date();
   const dateStr = today.toLocaleDateString('pt-AO');
 
-  // --- DESIGN HELPERS ---
-  const drawCard = (x: number, y: number, w: number, h: number, color: string = COLORS.white) => {
-      doc.setFillColor(color);
-      doc.setDrawColor(COLORS.border);
-      doc.setLineWidth(0.1);
-      doc.roundedRect(x, y, w, h, 3, 3, 'FD'); 
-  };
-
   const drawSectionHeader = (text: string, x: number, y: number) => {
       doc.setFont("helvetica", "bold");
       doc.setFontSize(9);
@@ -115,26 +107,18 @@ const generateCommercialDocument = async (
       doc.line(x, y + 2, x + 10, y + 2); 
   };
 
-  // ==========================================
-  // LAYOUT DE DUAS COLUNAS
-  // ==========================================
-  
   const leftX = config.logoX;
-  // AUMENTADO: Definimos o rightX como 200 (Margem Direita da Página) para alinhamento à direita
   const rightX = 200; 
   let currentY = config.logoY;
 
-  // 1. LOGO (Esquerda) & TÍTULO/DATA (Direita)
-  // ----------------------------------------------------
-  
-  // Logo
+  // 1. LOGO & HEADER
   if (logoData) {
       try {
         doc.addImage(logoData, 'PNG', leftX, currentY, config.logoWidth, config.logoHeight); 
       } catch (e) { console.error(e); }
   }
 
-  // Título e Meta Dados (Direita - ALINHADO À DIREITA)
+  // Título e Meta Dados (Direita)
   let headerRightY = currentY + 10; 
   const displayTitle = docType === "PRÓ-FORMA" ? "ORÇAMENTO" : "FACTURA/RECIBO";
   
@@ -148,9 +132,19 @@ const generateCommercialDocument = async (
   doc.setFontSize(10);
   doc.setTextColor(COLORS.navy);
   
-  const docNumClean = docNumber.replace('FR', 'PP').replace('FACTURA/RECIBO', '');
-  doc.text(`Nº ${docNumClean}`, rightX, headerRightY, { align: "right" });
+  // Exibir Número do Documento
+  doc.text(`${docNumber}`, rightX, headerRightY, { align: "right" });
   headerRightY += 5;
+
+  // Se for Factura/Recibo, mostra a referência do orçamento
+  if (docType === "FACTURA/RECIBO" && refQuote) {
+    doc.setFont("helvetica", "bold"); 
+    doc.setFontSize(9);
+    doc.setTextColor(COLORS.darkGray);
+    // Explicitly showing the linked quote number
+    doc.text(`Ref. Orçamento: ${refQuote}`, rightX, headerRightY, { align: "right" });
+    headerRightY += 5;
+  }
   
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
@@ -158,53 +152,42 @@ const generateCommercialDocument = async (
   doc.text(`Data: ${dateStr}`, rightX, headerRightY, { align: "right" });
 
 
-  // 2. CORREÇÃO DE POSICIONAMENTO E SOBREPOSIÇÃO
-  // ----------------------------------------------------
-  
-  // LADO ESQUERDO: 
+  // 2. DETALHES EMPRESA E CLIENTE
   let leftContentY = config.logoY + config.logoHeight - 6;
-
-  // LADO DIREITO: 
   let rightContentY = headerRightY + 15;
 
-  // -- COLUNA ESQUERDA (Empresa) --
+  // -- Empresa --
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
   doc.setTextColor(COLORS.navy); 
   doc.text(COMPANY_INFO.subTitle, leftX + 2, leftContentY);
-  
   leftContentY += 5; 
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   doc.setTextColor(COLORS.darkGray);
-  
   doc.text(COMPANY_INFO.line1, leftX + 2, leftContentY); leftContentY += 4;
   doc.text(`Nº de Contribuinte: ${COMPANY_INFO.nif}`, leftX + 2, leftContentY); leftContentY += 4;
   doc.text(`Tel. ${COMPANY_INFO.phones}`, leftX + 2, leftContentY); leftContentY += 4;
   doc.text(COMPANY_INFO.location, leftX + 2, leftContentY); leftContentY += 4;
   doc.text(`E-mail: ${COMPANY_INFO.email}`, leftX + 2, leftContentY);
 
-
-  // -- COLUNA DIREITA (Cliente - ALINHADO À DIREITA) --
-  
-  // Cabeçalho Customizado para a Direita
+  // -- Cliente --
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
   doc.setTextColor(COLORS.navy);
   doc.text("DADOS DO CLIENTE", rightX, rightContentY, { align: "right" });
-  
   doc.setDrawColor(COLORS.yellow);
   doc.setLineWidth(0.5);
-  // Linha desenhada da direita para a esquerda
   doc.line(rightX, rightContentY + 2, rightX - 10, rightContentY + 2); 
   
   rightContentY += 6;
 
+  // Saudação atualizada
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
   doc.setTextColor(COLORS.navy);
-  doc.text("Exmo(s) Sr.(s)/Sra(s).", rightX, rightContentY, { align: "right" });
+  doc.text("Exmo(a) Sr(a)", rightX, rightContentY, { align: "right" });
   rightContentY += 5;
 
   doc.setFontSize(11);
@@ -220,7 +203,6 @@ const generateCommercialDocument = async (
   rightContentY += 4;
 
   const addressText = clientAddress ? clientAddress : "----------------";
-  // Wrap text com largura de 80mm
   const addressLines = doc.splitTextToSize(addressText, 80); 
   doc.text(addressLines, rightX, rightContentY, { align: "right" });
   rightContentY += (addressLines.length * 4);
@@ -228,13 +210,9 @@ const generateCommercialDocument = async (
   doc.text("LUANDA - ANGOLA", rightX, rightContentY, { align: "right" });
 
 
-  // ==========================================
-  // 3. TABELA DE ITENS
-  // ==========================================
-  // Garantimos que a tabela comece após o maior dos conteúdos (esquerda ou direita)
+  // 3. TABELA
   let tableY = Math.max(leftContentY, rightContentY) + 15;
 
-  // Cabeçalho da Tabela
   doc.setFillColor(COLORS.navy);
   doc.roundedRect(10, tableY, 190, 10, 2, 2, 'F');
   
@@ -245,7 +223,7 @@ const generateCommercialDocument = async (
   const colDesc = 15;
   const colPrice = 130;
   const colQty = 160;
-  const colTotal = 195; // Alinha com o texto da direita que está em 200 (margem)
+  const colTotal = 195;
 
   doc.text("DESCRIÇÃO DO SERVIÇO", colDesc, tableY + 6.5);
   doc.text("PREÇO UNIT.", colPrice, tableY + 6.5, { align: "right" });
@@ -260,7 +238,6 @@ const generateCommercialDocument = async (
   doc.setTextColor(COLORS.darkGray);
 
   items.forEach((item, index) => {
-      // Zebra striping
       if (index % 2 === 0) {
           doc.setFillColor("#F9FAFB");
           doc.rect(10, pointerY - 5, 190, 8, 'F');
@@ -278,9 +255,7 @@ const generateCommercialDocument = async (
   doc.setDrawColor(COLORS.border);
   doc.line(10, pointerY - 2, 200, pointerY - 2);
 
-  // ==========================================
   // 4. RODAPÉ & TOTAIS
-  // ==========================================
   const footerStart = pointerY + 10;
   const paymentY = footerStart;
   
@@ -297,7 +272,6 @@ const generateCommercialDocument = async (
   let infoPayY = payBoxY + 8;
   const lineHeight = 6;
 
-  // Multicaixa Express
   doc.setFont("helvetica", "bold");
   doc.text("Multicaixa Express:", 15, infoPayY);
   doc.setFont("helvetica", "normal");
@@ -317,23 +291,18 @@ const generateCommercialDocument = async (
   doc.setTextColor(COLORS.navy);
   doc.text(COMPANY_INFO.iban, 15, infoPayY); 
   
-
-  // -- Lado Direito: Totais --
   const totalBoxX = 130;
   const totalBoxY = paymentY + 5;
   
-  // Total Geral Box
   doc.setFillColor(COLORS.navy);
   doc.roundedRect(totalBoxX, totalBoxY + 15, 70, 18, 2, 2, 'F');
   
-  // Subtotal
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.setTextColor(COLORS.darkGray);
   doc.text("Subtotal", 135, totalBoxY + 10);
   doc.text(formatCurrencyAOA(totalLiquido), 195, totalBoxY + 10, { align: "right" });
 
-  // Total dentro da caixa azul
   doc.setTextColor(COLORS.white);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7);
@@ -342,36 +311,25 @@ const generateCommercialDocument = async (
   doc.setFontSize(14);
   doc.text(formatCurrencyAOA(totalLiquido) + " Kz", 195, totalBoxY + 29, { align: "right" }); 
 
-
-  // ==========================================
   // 5. ASSINATURA / RODAPÉ FINAL
-  // ==========================================
   const pageBottom = 280;
   let footerY = pageBottom;
   
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
   doc.setTextColor(COLORS.darkGray);
-  
-  // Linha amarela
   doc.setDrawColor(COLORS.yellow);
   doc.setLineWidth(1);
   doc.line(10, footerY - 5, 200, footerY - 5);
 
-  // Obrigado pela preferência
   doc.text("Obrigado pela preferência!", 105, footerY, { align: "center" });
   footerY += 4;
-
-  // Slogans (Movidos para cá)
   doc.setFont("helvetica", "normal");
   doc.text(COMPANY_INFO.slogan1, 105, footerY, { align: "center" });
   footerY += 4;
-
   doc.setFont("helvetica", "bold");
   doc.text(COMPANY_INFO.slogan2, 105, footerY, { align: "center" });
   footerY += 6;
-
-  // Nota de sistema
   doc.setFont("helvetica", "normal");
   doc.setFontSize(6);
   doc.text("Documento processado por computador.", 105, footerY, { align: "center" });
@@ -379,23 +337,19 @@ const generateCommercialDocument = async (
   const timestamp = Math.floor(Date.now() / 1000);
   const finalFileName = `${fileNamePrefix}_${clientName.replace(/\s+/g, '_')}_${timestamp}.pdf`;
   
-  // Download automatically as a fallback
   doc.save(finalFileName);
-
-  // Return the File object for Web Share API
   const blob = doc.output('blob');
   return new File([blob], finalFileName, { type: 'application/pdf' });
 };
 
-export const generateQuotePDF = async (clientName: string, clientPhone: string | undefined, clientAddress: string | undefined, items: PDFItem[], settings?: PDFSettings): Promise<File> => {
-    const year = new Date().getFullYear();
-    const id = Math.floor(Math.random() * 1000); 
-    return await generateCommercialDocument("PRÓ-FORMA", `PP ${year}/${id}`, clientName, clientPhone, clientAddress, items, "Orcamento", settings);
+// Takes specific document ID now
+export const generateQuotePDF = async (clientName: string, clientPhone: string | undefined, clientAddress: string | undefined, items: PDFItem[], docId: string, settings?: PDFSettings): Promise<File> => {
+    return await generateCommercialDocument("PRÓ-FORMA", docId, clientName, clientPhone, clientAddress, items, "Orcamento", settings);
 };
 
-export const generateInvoicePDF = async (clientName: string, clientPhone: string | undefined, clientAddress: string | undefined, items: PDFItem[], orderId: string, settings?: PDFSettings): Promise<File> => {
-    const year = new Date().getFullYear();
-    return await generateCommercialDocument("FACTURA/RECIBO", `FR ${year}/${orderId}`, clientName, clientPhone, clientAddress, items, "Factura", settings);
+// Takes specific document ID and reference Quote ID
+export const generateInvoicePDF = async (clientName: string, clientPhone: string | undefined, clientAddress: string | undefined, items: PDFItem[], docId: string, refQuoteId: string | undefined, settings?: PDFSettings): Promise<File> => {
+    return await generateCommercialDocument("FACTURA/RECIBO", docId, clientName, clientPhone, clientAddress, items, "Factura", settings, refQuoteId);
 };
 
 export const generateMonthlyReportPDF = async (
@@ -467,11 +421,7 @@ export const generateMonthlyReportPDF = async (
 
     const timestamp = Math.floor(Date.now() / 1000);
     const finalFileName = `Relatorio_${monthName}_${timestamp}.pdf`;
-    
-    // Download fallback
     doc.save(finalFileName);
-
-    // Return File for Sharing
     const blob = doc.output('blob');
     return new File([blob], finalFileName, { type: 'application/pdf' });
 };

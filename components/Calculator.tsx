@@ -77,7 +77,7 @@ const AnimatedItem: React.FC<AnimatedItemProps> = ({ children, index }) => {
 };
 
 const Calculator: React.FC = () => {
-  const { services, addOrder, pdfSettings, showNotification } = useData(); 
+  const { services, addOrder, pdfSettings, showNotification, generateDocId } = useData(); 
 
   // Derive categories ONLY from existing services or the Enum
   const serviceCategories = useMemo(() => {
@@ -107,6 +107,9 @@ const Calculator: React.FC = () => {
   const [generatedProposal, setGeneratedProposal] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  
+  // Store the generated quote ID to reuse when saving order
+  const [currentQuoteId, setCurrentQuoteId] = useState<string | null>(null);
 
   // Update travel price suggestion when distance changes, but allow override
   useEffect(() => {
@@ -245,19 +248,26 @@ const Calculator: React.FC = () => {
             }
         ];
         
-        const pdfFile = await generateQuotePDF(clientName, clientPhone, clientAddress, pdfItems, pdfSettings);
+        // Generate new sequential ID
+        const docId = generateDocId('QUOTE');
+        setCurrentQuoteId(docId); // Save this ID to use when saving order
+
+        const pdfFile = await generateQuotePDF(clientName, clientPhone, clientAddress, pdfItems, docId, pdfSettings);
         showNotification('PDF Pronto! Abrindo opções de partilha...', 'success');
 
-        // Trigger Native Sharing
         if (navigator.share && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
             await navigator.share({
                 files: [pdfFile],
                 title: 'Orçamento Mais Palma',
-                text: `Olá ${clientName}, segue o orçamento solicitado.`
+                text: `Olá ${clientName}, segue o orçamento solicitado (Ref: ${docId}).`
             });
         }
 
-    } catch (error) {
+    } catch (error: any) {
+        if (error.name === 'AbortError') {
+             console.log('Compartilhamento cancelado pelo usuário');
+             return;
+        }
         console.error("Error generating PDF", error);
         showNotification('PDF Salvo em Downloads', 'info');
     } finally {
@@ -269,6 +279,9 @@ const Calculator: React.FC = () => {
     if (!clientName) return alert("Insira o nome do cliente.");
     if (cart.length === 0) return alert("Adicione itens ao orçamento.");
     
+    // Use the generated Quote ID if available, or generate one now
+    const quoteRef = currentQuoteId || generateDocId('QUOTE');
+
     const newOrder: ServiceOrder = {
         id: Math.floor(10000 + Math.random() * 90000).toString(),
         clientName: clientName,
@@ -277,16 +290,20 @@ const Calculator: React.FC = () => {
         status: 'PENDING',
         date: new Date().toLocaleDateString('pt-AO'),
         address: clientAddress || `A definir (${distanceKm}km)`,
-        phone: clientPhone || 'A definir'
+        phone: clientPhone || 'A definir',
+        quoteRef: quoteRef
     };
     
     addOrder(newOrder);
-    showNotification(`Pedido #${newOrder.id} salvo com sucesso!`, 'success');
+    showNotification(`Pedido #${newOrder.id} salvo com Ref: ${quoteRef}`, 'success');
+    
+    // Reset form
     setClientName('');
     setClientPhone('');
     setClientAddress('');
     setCart([]);
     setGeneratedProposal('');
+    setCurrentQuoteId(null);
   };
 
   const formatMoney = (val: number) => {

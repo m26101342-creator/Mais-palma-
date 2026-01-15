@@ -62,6 +62,7 @@ export interface ServiceOrder {
   phone: string;
   photos?: ServicePhotos;
   notes?: string;
+  quoteRef?: string; // Referência ao número do Orçamento (MP 2026/0101)
 }
 
 export interface FinancialSummary {
@@ -76,4 +77,10 @@ export interface PDFSettings {
   logoY: number;
   logoWidth: number;
   logoHeight: number;
+}
+
+export interface DocCounters {
+  quoteSequence: number;
+  invoiceSequence: number;
+  lastMonth: string; // To detect month changes
 }
