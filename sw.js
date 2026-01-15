@@ -1,9 +1,9 @@
 
-const CACHE_NAME = 'mais-palma-pro-v5'; // Versão incrementada
-const RUNTIME_CACHE = 'runtime-cache';
+const CACHE_NAME = 'mais-palma-v6-offline-fix';
+const ASSETS_CACHE = 'assets-cache-v6';
 
-// Arquivos que DEVEM estar no cache imediatamente
-const PRECACHE_URLS = [
+// Arquivos fundamentais que fazem o app "ligar"
+const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
@@ -11,98 +11,84 @@ const PRECACHE_URLS = [
   'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap'
 ];
 
-// 1. Instalação: Prepara o terreno
+// 1. INSTALAÇÃO: Cacheia o essencial imediatamente
 self.addEventListener('install', (event) => {
-  self.skipWaiting(); // Força ativação imediata
+  self.skipWaiting(); // Força o SW a assumir o controle imediatamente
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => {
-        console.log('[SW] Instalando e cacheando núcleo');
-        return cache.addAll(PRECACHE_URLS);
-      })
+    caches.open(CACHE_NAME).then((cache) => {
+      console.log('[SW] Instalando App Shell...');
+      return cache.addAll(STATIC_ASSETS);
+    })
   );
 });
 
-// 2. Ativação: Limpeza pesada de versões antigas
+// 2. ATIVAÇÃO: Limpa caches velhos para não dar conflito
 self.addEventListener('activate', (event) => {
-  const currentCaches = [CACHE_NAME, RUNTIME_CACHE];
   event.waitUntil(
-    caches.keys().then(cacheNames => {
+    caches.keys().then((cacheNames) => {
       return Promise.all(
-        cacheNames.map(cacheName => {
-          if (!currentCaches.includes(cacheName)) {
-            console.log('[SW] Removendo cache obsoleto:', cacheName);
-            return caches.delete(cacheName);
+        cacheNames.map((cache) => {
+          if (cache !== CACHE_NAME && cache !== ASSETS_CACHE) {
+            console.log('[SW] Limpando cache antigo:', cache);
+            return caches.delete(cache);
           }
         })
       );
-    }).then(() => self.clients.claim())
+    }).then(() => self.clients.claim()) // Controla as páginas abertas imediatamente
   );
 });
 
-// 3. Estratégia de Interceptação (O Segredo do Offline)
+// 3. INTERCEPTAÇÃO (O Coração do Offline)
 self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
+  const request = event.request;
+  const url = new URL(request.url);
 
-  // A. Ignorar Google Analytics, Gemini AI e coisas que exigem internet pura
-  if (url.hostname.includes('google') || url.hostname.includes('generativelanguage')) {
+  // Ignora APIs externas pesadas ou que exigem auth online (ex: Gemini)
+  if (url.hostname.includes('generativelanguage') || url.hostname.includes('googleapis')) {
     return;
   }
 
-  // B. Navegação (Abrir o App) -> Network First, Fallback Cache
-  // Tenta abrir a página. Se falhar (offline), abre o index.html salvo.
-  if (event.request.mode === 'navigate') {
+  // ESTRATÉGIA A: Navegação (HTML / O App em si)
+  // Se o usuário pedir a página, tenta a rede. Se falhar (offline), entrega o index.html do cache.
+  if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request)
-        .then(response => {
-           return caches.open(CACHE_NAME).then(cache => {
-             cache.put(event.request, response.clone());
-             return response;
-           });
+      fetch(request)
+        .then((networkRes) => {
+          return caches.open(CACHE_NAME).then((cache) => {
+            cache.put(request, networkRes.clone());
+            return networkRes;
+          });
         })
         .catch(() => {
-          // O GRANDE TRUQUE: Se estiver offline, retorna o index.html
-          // Isso permite que o React carregue e leia o LocalStorage
+          // SE FALHAR A REDE: Retorna o index.html cacheado (o app carrega offline)
           return caches.match('/index.html');
         })
     );
     return;
   }
 
-  // C. Arquivos JS, CSS, Imagens (Assets do Vite) -> Stale-While-Revalidate
-  // Tenta servir do cache (rápido). Em paralelo, busca na rede e atualiza o cache.
-  // Se não tiver no cache, busca na rede e salva para a próxima.
+  // ESTRATÉGIA B: Arquivos Estáticos (JS, CSS, Imagens, Fontes)
+  // Tenta pegar do cache primeiro (velocidade). Se não tiver, baixa e salva.
   event.respondWith(
-    caches.match(event.request).then(cachedResponse => {
-      // Se tem no cache, retorna imediatamente
-      if (cachedResponse) {
-        // Atualiza o cache em background se tiver internet
-        fetch(event.request).then(networkResponse => {
-             if(networkResponse && networkResponse.status === 200) {
-                 caches.open(RUNTIME_CACHE).then(cache => {
-                     cache.put(event.request, networkResponse.clone());
-                 });
-             }
-        }).catch(() => {}); // Ignora erros de rede em background
-        return cachedResponse;
+    caches.match(request).then((cachedRes) => {
+      if (cachedRes) {
+        return cachedRes; // Retorna do cache instantaneamente
       }
 
-      // Se não tem no cache, busca na rede e salva
-      return fetch(event.request).then(response => {
-        // Verifica se a resposta é válida
-        if (!response || response.status !== 200 || response.type !== 'basic') {
-          return response;
+      // Se não tem no cache, busca na rede e salva para o futuro
+      return fetch(request).then((networkRes) => {
+        if (!networkRes || networkRes.status !== 200 || networkRes.type !== 'basic' && networkRes.type !== 'cors') {
+          return networkRes;
         }
 
-        const responseToCache = response.clone();
-        caches.open(RUNTIME_CACHE).then(cache => {
-          cache.put(event.request, responseToCache);
+        const responseToCache = networkRes.clone();
+        caches.open(ASSETS_CACHE).then((cache) => {
+          cache.put(request, responseToCache);
         });
 
-        return response;
-      }).catch(error => {
-         // Se falhar tudo (offline e sem cache), não há muito o que fazer para imagens novas
-         console.log('[SW] Falha ao buscar recurso:', event.request.url);
+        return networkRes;
+      }).catch(() => {
+         // Se falhar imagem offline, poderia retornar um placeholder aqui
       });
     })
   );

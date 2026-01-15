@@ -1,15 +1,15 @@
 
 {
-  "name": "Mais Palma Manager",
+  "name": "Mais Palma",
   "short_name": "Mais Palma",
-  "description": "Gestão completa para empresas de higienização",
-  "start_url": "/?source=pwa",
+  "description": "Gestão Empresarial de Higienização",
+  "start_url": "/",
   "display": "standalone",
-  "display_override": ["window-controls-overlay", "standalone"],
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "background_color": "#F3F4F6",
   "theme_color": "#F3F4F6",
-  "orientation": "portrait-primary",
-  "categories": ["business", "finance", "productivity"],
+  "orientation": "portrait",
+  "scope": "/",
   "icons": [
     {
       "src": "https://i.postimg.cc/6q6K9xSV/Imagotipo_V_2.png",

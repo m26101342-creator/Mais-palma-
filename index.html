@@ -5,13 +5,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     
-    <!-- PWA Settings for Native Feel -->
+    <!-- PWA: Remover interface de navegador -->
     <meta name="theme-color" content="#F3F4F6" />
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="application-name" content="Mais Palma">
     <meta name="apple-mobile-web-app-title" content="Mais Palma">
+    <meta name="msapplication-navbutton-color" content="#F3F4F6">
     <meta name="msapplication-starturl" content="/">
     
     <title>Mais Palma Manager</title>
@@ -21,30 +22,12 @@
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-      // Enhanced Service Worker Registration
+      // Registro agressivo do Service Worker
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js')
-            .then(registration => {
-              console.log('SW registered successfully:', registration.scope);
-              
-              // Check for updates
-              registration.onupdatefound = () => {
-                const installingWorker = registration.installing;
-                if (installingWorker) {
-                  installingWorker.onstatechange = () => {
-                    if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                      // New content is available; please refresh.
-                      console.log('New content available, refreshing...');
-                      // Optional: Trigger a UI toast to ask user to reload
-                    }
-                  };
-                }
-              };
-            })
-            .catch(error => {
-              console.log('SW registration failed:', error);
-            });
+          navigator.serviceWorker.register('/sw.js', { scope: '/' })
+            .then(reg => console.log('SW Registrado:', reg.scope))
+            .catch(err => console.log('SW Falha:', err));
         });
       }
 
@@ -52,7 +35,6 @@
       window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         window.deferredPrompt = e;
-        window.dispatchEvent(new Event('installable'));
       });
 
       tailwind.config = {
@@ -60,11 +42,6 @@
         theme: {
           extend: {
             colors: {
-              gray: {
-                50: '#FAFAFA',
-                100: '#F5F5F5',
-                200: '#E5E5E5',
-              },
               brand: {
                 black: '#211D49',   
                 dark: '#1A173B',    
@@ -87,18 +64,9 @@
             },
             backgroundImage: {
               'gradient-premium': 'linear-gradient(135deg, #F3A421 0%, #F5B045 100%)', 
-              'gradient-dark': 'radial-gradient(circle at top right, #2F2A5F 0%, #211D49 60%)',
-              'gradient-light': 'linear-gradient(to bottom, #FFFFFF 0%, #FAFAFA 100%)',
             },
             animation: {
               'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-              'float': 'float 6s ease-in-out infinite',
-            },
-            keyframes: {
-              float: {
-                '0%, 100%': { transform: 'translateY(0)' },
-                '50%': { transform: 'translateY(-10px)' },
-              }
             }
           }
         }
@@ -108,51 +76,26 @@
     <style>
       :root {
         --bg-main: #FFFFFF;      
-        --bg-card: #FFFFFF;      
-        --bg-input: #FAFAFA;     
         --text-main: #211D49; 
-        --text-muted: #9CA3AF;
         --primary: #F3A421;      
-        --border: #F3F4F6;
-        --shadow-soft: 0 10px 40px -10px rgba(0, 0, 0, 0.05);
-        --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
-      }
-
-      .dark {
-        --bg-main: #1A173B;      
-        --bg-card: #211D49;      
-        --bg-input: #2A2655;     
-        --text-main: #FAFAFA;    
-        --text-muted: #A1A1AA;   
-        --primary: #F3A421;      
-        --border: rgba(255, 255, 255, 0.06);
-        --shadow-soft: 0 25px 50px -12px rgba(0, 0, 0, 0.9);
-        --shadow-card: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
       }
 
       body { 
         font-family: 'Inter', sans-serif; 
-        background-color: #F3F4F6; /* Matched to PWA background */
+        background-color: #F3F4F6;
         color: var(--text-main); 
-        transition: background-color 0.4s ease, color 0.4s ease;
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
+        /* Remove o efeito elástico do navegador */
         overscroll-behavior-y: none;
-      }
-      
-      .dark body {
-        background-image: var(--gradient-dark);
-        background-attachment: fixed;
+        -webkit-tap-highlight-color: transparent;
       }
 
+      /* Esconde barra de rolagem mas mantém funcionalidade */
       .scrollbar-hide::-webkit-scrollbar { display: none; }
       .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 
       input::-webkit-outer-spin-button,
       input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-      input[type=number] { -moz-appearance: textfield; }
-      input::-webkit-calendar-picker-indicator { display: none !important; }
-
+      
       .animate-slide-up { animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
       @keyframes slideUp {
         from { transform: translateY(20px); opacity: 0; }
